@@ -42,6 +42,13 @@ struct AppState {
 };
 
 HWND g_window{};
+int g_dpi = 96; // системный DPI, уточняется в WinMain до создания окна
+
+// Перевод "базовых пикселей" (при 96 DPI) в реальные на текущем DPI.
+int scaled(int pixels) {
+    return MulDiv(pixels, g_dpi, 96);
+}
+
 HWND g_min_edit{};
 HWND g_max_edit{};
 HWND g_generate_btn{};
@@ -198,45 +205,50 @@ HFONT create_message_font() {
     return CreateFontIndirectW(&metrics.lfMessageFont);
 }
 
-HFONT create_big_font(HWND window) {
-    HDC dc = GetDC(window);
-    const int dpi = GetDeviceCaps(dc, LOGPIXELSY);
-    ReleaseDC(window, dc);
-    return CreateFontW(-MulDiv(30, dpi, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE,
+HFONT create_big_font() {
+    return CreateFontW(-MulDiv(30, g_dpi, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE,
                        FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
                        CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH,
                        L"Arial");
 }
 
 void create_controls(HWND parent) {
-    const HWND min_label = create_control(parent, L"STATIC", L"Min",
-                                          SS_RIGHT, 0, 8, 11, 34, 18, 0);
-    g_min_edit = create_control(parent, L"EDIT", L"1", WS_TABSTOP | WS_BORDER,
-                                0, 48, 9, 50, 22, kIdMinEdit);
-    g_generate_btn = create_control(parent, L"BUTTON", L"Пуск",
-                                    WS_TABSTOP | BS_DEFPUSHBUTTON, 0, 108, 8,
-                                    92, 24, kIdGenerate);
-    const HWND max_label = create_control(parent, L"STATIC", L"Max",
-                                          SS_RIGHT, 0, 8, 39, 34, 18, 0);
-    g_max_edit = create_control(parent, L"EDIT", L"6", WS_TABSTOP | WS_BORDER,
-                                0, 48, 37, 50, 22, kIdMaxEdit);
+    const HWND min_label = create_control(parent, L"STATIC", L"Min", SS_RIGHT,
+                                          0, scaled(8), scaled(11), scaled(34),
+                                          scaled(18), 0);
+    g_min_edit = create_control(parent, L"EDIT", L"1", WS_TABSTOP | WS_BORDER, 0,
+                                scaled(48), scaled(9), scaled(50), scaled(22),
+                                kIdMinEdit);
+    g_generate_btn = create_control(
+        parent, L"BUTTON", L"Пуск", WS_TABSTOP | BS_DEFPUSHBUTTON, 0, scaled(108),
+        scaled(8), scaled(92), scaled(24), kIdGenerate);
+    const HWND max_label = create_control(
+        parent, L"STATIC", L"Max", SS_RIGHT, 0, scaled(8), scaled(39), scaled(34),
+        scaled(18), 0);
+    g_max_edit = create_control(parent, L"EDIT", L"6", WS_TABSTOP | WS_BORDER, 0,
+                                scaled(48), scaled(37), scaled(50), scaled(22),
+                                kIdMaxEdit);
     g_clear_btn = create_control(parent, L"BUTTON", L"Очистить",
-                                 WS_TABSTOP | BS_PUSHBUTTON, 0, 108, 36, 92, 24,
-                                 kIdClear);
-    g_no_repeat = create_control(parent, L"BUTTON", L"Без повторов",
-                                 WS_TABSTOP | BS_AUTOCHECKBOX, 0, 8, 66, 194, 18,
-                                 kIdNoRepeat);
+                                 WS_TABSTOP | BS_PUSHBUTTON, 0, scaled(108),
+                                 scaled(36), scaled(92), scaled(24), kIdClear);
+    g_no_repeat = create_control(
+        parent, L"BUTTON", L"Без повторов", WS_TABSTOP | BS_AUTOCHECKBOX, 0,
+        scaled(8), scaled(66), scaled(194), scaled(18), kIdNoRepeat);
     g_result = create_control(parent, L"STATIC", L"—",
-                              SS_CENTER | SS_CENTERIMAGE | SS_NOPREFIX, 0, 8,
-                              90, 194, 44, kIdResult);
-    const HWND history_label = create_control(parent, L"STATIC", L"История:",
-                                              SS_CENTER, 0, 8, 140, 194, 18, 0);
+                              SS_CENTER | SS_CENTERIMAGE | SS_NOPREFIX, 0,
+                              scaled(8), scaled(90), scaled(194), scaled(44),
+                              kIdResult);
+    const HWND history_label = create_control(
+        parent, L"STATIC", L"История:", SS_CENTER, 0, scaled(8), scaled(140),
+        scaled(194), scaled(18), 0);
 
     for (int i = 0; i < kHistoryCapacity; ++i) {
-        const int x = 12 + i * 38; // ячейка 34 + отступ 4
+        // Ячейка 34 + отступ 4.
+        const int x = scaled(12 + i * 38);
         g_history_cells[i] = create_control(
             parent, L"STATIC", L"", SS_CENTER | SS_CENTERIMAGE,
-            WS_EX_STATICEDGE, x, 162, 34, 22, kIdHistoryCell0 + i);
+            WS_EX_STATICEDGE, x, scaled(162), scaled(34), scaled(22),
+            kIdHistoryCell0 + i);
     }
 
     for (HWND control : {g_min_edit, g_max_edit, g_generate_btn, g_clear_btn,
@@ -304,7 +316,15 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int show) {
 
     // resizable(False, False) из оригинала.
     const DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-    RECT rect{0, 0, kClientWidth, kClientHeight};
+    // Реальный системный DPI — до всех расчётов размеров.
+    {
+        HDC screen = GetDC(nullptr);
+        g_dpi = GetDeviceCaps(screen, LOGPIXELSY);
+        ReleaseDC(nullptr, screen);
+        if (g_dpi < 96)
+            g_dpi = 96; // защита от нестандартных значений (логические экраны)
+    }
+    RECT rect{0, 0, scaled(kClientWidth), scaled(kClientHeight)};
     AdjustWindowRect(&rect, style, FALSE);
 
     g_window = CreateWindowExW(
@@ -313,7 +333,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int show) {
         instance, nullptr);
 
     g_font = create_message_font();
-    g_big_font = create_big_font(g_window);
+    g_big_font = create_big_font();
     create_controls(g_window);
 
     // Центрирование окна, как в оригинале (winfo_screenwidth/height).
