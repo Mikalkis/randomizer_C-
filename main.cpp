@@ -292,6 +292,12 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int show) {
     window_class.lpfnWndProc = wnd_proc;
     window_class.hInstance = instance;
     window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    // Иконка из app.rc; если не загрузилась — системная.
+    HICON icon = LoadIconW(instance, MAKEINTRESOURCEW(1));
+    if (!icon)
+        icon = LoadIconW(nullptr, IDI_APPLICATION);
+    window_class.hIcon = icon;
+    window_class.hIconSm = icon;
     window_class.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
     window_class.lpszClassName = kWindowClass;
     RegisterClassExW(&window_class);

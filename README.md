@@ -47,8 +47,21 @@ cl /W4 /EHsc /utf-8 main.cpp user32.lib gdi32.lib /Fe:rand.exe /link /subsystem:
 | Файл | Назначение |
 | --- | --- |
 | `main.cpp` | Вся программа: логика генератора + WinAPI GUI |
+| `app.rc` | Ресурсы: иконка exe и окна (`icon.ico`) |
+| `make_icon.py` | Сборка `icon.ico` (нужен Python + Pillow) |
 | `CMakeLists.txt` | Сборка через CMake |
 | `random_generator.py` | Исходная версия на Python (tkinter), для сравнения |
+
+Иконка задаётся файлом `icon.ico` и подключается через `app.rc`. Чтобы
+нарисовать её заново из любого своего изображения, положите картинку рядом и
+запустите:
+
+```sh
+python make_icon.py
+```
+
+Скрипт рисует иконку сам (игральный кубик) — чтобы использовать свою,
+замените `main()` на `Image.open("ваша.png").convert("RGBA").save(...)`.
 
 ## Лицензия
 
