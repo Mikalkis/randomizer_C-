@@ -13,6 +13,12 @@
 #include <set>
 #include <string>
 
+// WM_GETDEFID (0x00B1) — диалоговое сообщение, но в публичных заголовках
+// MSVC его нет; объявляем сами, если компилятор не посчитал нужным.
+#ifndef WM_GETDEFID
+#define WM_GETDEFID 0x00B1
+#endif
+
 namespace {
 
 constexpr wchar_t kWindowClass[] = L"RandApp";
