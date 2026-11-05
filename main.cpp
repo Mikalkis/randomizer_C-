@@ -18,6 +18,9 @@ namespace {
 constexpr wchar_t kWindowClass[] = L"RandApp";
 constexpr wchar_t kWindowTitle[] = L"Rand";
 constexpr int kHistoryCapacity = 5;
+// Ограничение в режиме «Без повторов»: счётчик свободных значений и память
+// used растут линейно от размера диапазона.
+constexpr int kNoRepeatLimit = 100000;
 // Клиентская область оригинального окна tkinter: 210x200.
 constexpr int kClientWidth = 210;
 constexpr int kClientHeight = 200;
@@ -130,6 +133,15 @@ void generate() {
     if (min_value > max_value) {
         MessageBoxW(g_window, L"Минимум больше максимума", L"Ошибка",
                     MB_ICONERROR);
+        return;
+    }
+    // Свободные значения перебираются по одному (см. ниже), поэтому
+    // гигантские диапазоны в этом режиме бессмысленны — ограничиваем.
+    if (no_repeat_checked() &&
+        static_cast<long long>(max_value) - min_value + 1 > kNoRepeatLimit) {
+        MessageBoxW(g_window,
+                    L"Слишком большой диапазон для режима «Без повторов»",
+                    L"Ошибка", MB_ICONERROR);
         return;
     }
 
@@ -288,6 +300,10 @@ LRESULT CALLBACK wnd_proc(HWND window, UINT message, WPARAM w_param,
                     return 0;
             }
             break;
+        case WM_GETDEFID:
+            // Enter = «Пуск»: IsDialogMessage ищет дефолтную кнопку через
+            // этот запрос; обычное окно без обработчика пищит и игнорирует.
+            return MAKELRESULT(kIdGenerate, DC_HASDEFID);
         case WM_DESTROY:
             PostQuitMessage(0);
             return 0;
@@ -347,6 +363,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int show) {
                  SWP_NOSIZE | SWP_NOZORDER);
 
     ShowWindow(g_window, show);
+    SetFocus(g_min_edit);
 
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0) {
